@@ -1,4 +1,4 @@
-// export default CreateTask;
+// src/components/CreateTask.js
 
 import React, { useEffect, useState } from "react";
 import DatePicker from "react-datepicker";
@@ -13,21 +13,24 @@ const CreateTask = ({ onSubmit, onCancel }) => {
     throw new Error("onSubmit prop must be a function");
   }
 
+  // --- State Initialization ---
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState(new Date());
   const [priority, setPriority] = useState("medium");
-  const [category, setCategory] = useState(""); // will hold category id
+  // category will hold the ID as a string for form compatibility
+  const [category, setCategory] = useState("");
   const [status, setStatus] = useState("pending");
   const [assignedUsers, setAssignedUsers] = useState([]);
   const [files, setFiles] = useState([]);
   const [users, setUsers] = useState([]);
-  const [categories, setCategories] = useState([]); // NEW: category list
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // --- Data Fetching Effect ---
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -45,11 +48,14 @@ const CreateTask = ({ onSubmit, onCancel }) => {
         });
         setCategories(catsRes.data);
 
-        // Preselect first category if available
+        // FIX: Ensure initial state is set as a STRING ID if data exists
         if (catsRes.data.length > 0) {
-          setCategory(catsRes.data[0].id);
+          setCategory(String(catsRes.data[0].id));
+        } else {
+          setCategory(""); // Kept empty to match the placeholder
         }
       } catch (error) {
+        console.error("Failed to load initial data:", error);
         setErrorMessage("Failed to load users or categories.");
       } finally {
         setLoading(false);
@@ -74,7 +80,8 @@ const CreateTask = ({ onSubmit, onCancel }) => {
     setDescription("");
     setDueDate(new Date());
     setPriority("medium");
-    setCategory(categories.length > 0 ? categories[0].id : "");
+    // FIX: Ensure reset value is a STRING ID
+    setCategory(categories.length > 0 ? String(categories[0].id) : "");
     setStatus("pending");
     setAssignedUsers([]);
     setFiles([]);
@@ -100,7 +107,7 @@ const CreateTask = ({ onSubmit, onCancel }) => {
       formData.append("due_date", formattedDate);
 
       formData.append("priority", priority);
-      formData.append("category", category); // now sending category ID
+      formData.append("category", category); // sending the category ID (as a string)
       formData.append("status", status);
 
       assignedUsers.forEach((userId) =>
@@ -116,6 +123,7 @@ const CreateTask = ({ onSubmit, onCancel }) => {
         setSuccessMessage("");
       }, 3000);
     } catch (error) {
+      console.error("Task creation failed:", error.response || error);
       setErrorMessage(
         error?.response?.data?.detail ||
           error?.message ||
@@ -140,6 +148,7 @@ const CreateTask = ({ onSubmit, onCancel }) => {
     );
   }
 
+  // --- Rendered Form ---
   return (
     <Container
       className={clsx(
@@ -154,6 +163,7 @@ const CreateTask = ({ onSubmit, onCancel }) => {
       <Card className="p-4 shadow" style={{ width: "100%", maxWidth: "600px" }}>
         <h3 className="text-center mb-4">Create Task</h3>
 
+        {/* Alerts */}
         {successMessage && (
           <Alert variant="success" className="mb-3">
             {successMessage}
@@ -167,7 +177,7 @@ const CreateTask = ({ onSubmit, onCancel }) => {
 
         <Form onSubmit={handleSubmit}>
           {/* Title */}
-          <Form.Group controlId="taskTitle">
+          <Form.Group controlId="taskTitle" className="mb-3">
             <Form.Control
               type="text"
               placeholder="Task Title"
@@ -178,7 +188,7 @@ const CreateTask = ({ onSubmit, onCancel }) => {
           </Form.Group>
 
           {/* Description */}
-          <Form.Group controlId="taskDescription" className="mt-3">
+          <Form.Group controlId="taskDescription" className="mb-3">
             <Form.Control
               as="textarea"
               placeholder="Task Description"
@@ -190,7 +200,7 @@ const CreateTask = ({ onSubmit, onCancel }) => {
           </Form.Group>
 
           {/* Due Date */}
-          <Form.Group controlId="dueDate" className="mt-3">
+          <Form.Group controlId="dueDate" className="mb-3">
             <Form.Label>Due Date</Form.Label>
             <DatePicker
               selected={dueDate}
@@ -202,7 +212,7 @@ const CreateTask = ({ onSubmit, onCancel }) => {
           </Form.Group>
 
           {/* Priority */}
-          <Form.Group controlId="taskPriority" className="mt-3">
+          <Form.Group controlId="taskPriority" className="mb-3">
             <Form.Label>Priority</Form.Label>
             <Form.Select
               value={priority}
@@ -214,8 +224,8 @@ const CreateTask = ({ onSubmit, onCancel }) => {
             </Form.Select>
           </Form.Group>
 
-          {/* Category */}
-          <Form.Group controlId="taskCategory" className="mt-3">
+          {/* Category Dropdown (Dynamic) */}
+          <Form.Group controlId="taskCategory" className="mb-3">
             <Form.Label>Category</Form.Label>
             <Form.Select
               value={category}
@@ -225,7 +235,10 @@ const CreateTask = ({ onSubmit, onCancel }) => {
               <option value="" disabled hidden>
                 Select a Category
               </option>
+
+              {/* Map over fetched categories */}
               {categories.map((cat) => (
+                // FIX: Use of String(cat.id) to ensure consistency with state
                 <option key={cat.id} value={String(cat.id)}>
                   {cat.name}
                 </option>
@@ -234,7 +247,7 @@ const CreateTask = ({ onSubmit, onCancel }) => {
           </Form.Group>
 
           {/* Status */}
-          <Form.Group controlId="taskStatus" className="mt-3">
+          <Form.Group controlId="taskStatus" className="mb-3">
             <Form.Label>Status</Form.Label>
             <Form.Select
               value={status}
@@ -247,7 +260,7 @@ const CreateTask = ({ onSubmit, onCancel }) => {
           </Form.Group>
 
           {/* Assigned Users */}
-          <Form.Group controlId="assignedUsers" className="mt-3">
+          <Form.Group controlId="assignedUsers" className="mb-3">
             <Form.Label>Assigned Users</Form.Label>
             <Form.Select
               multiple
@@ -264,14 +277,19 @@ const CreateTask = ({ onSubmit, onCancel }) => {
           </Form.Group>
 
           {/* Files */}
-          <Form.Group controlId="taskFiles" className="mt-3">
+          <Form.Group controlId="taskFiles" className="mb-3">
             <Form.Label>Upload Files</Form.Label>
             <Form.Control type="file" multiple onChange={handleFileChange} />
           </Form.Group>
 
+          {/* Buttons */}
           <div className="d-flex justify-content-between mt-4">
             <Button variant="primary" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Submitting..." : "Create Task"}
+              {isSubmitting ? (
+                <Spinner animation="border" size="sm" />
+              ) : (
+                "Create Task"
+              )}
             </Button>
             <Button
               variant="outline-secondary"
