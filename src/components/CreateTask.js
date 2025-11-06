@@ -1,5 +1,4 @@
 // src/components/CreateTask.js
-
 import React, { useEffect, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -7,18 +6,17 @@ import { Container, Card, Form, Button, Alert, Spinner } from "react-bootstrap";
 import styles from "../styles/Common.module.css";
 import clsx from "clsx";
 import api from "../services/api";
+import publicApi from "../services/publicApi";
 
 const CreateTask = ({ onSubmit, onCancel }) => {
   if (typeof onSubmit !== "function") {
     throw new Error("onSubmit prop must be a function");
   }
 
-  // --- State Initialization ---
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState(new Date());
   const [priority, setPriority] = useState("medium");
-  // category will hold the ID as a string for form compatibility
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState("pending");
   const [assignedUsers, setAssignedUsers] = useState([]);
@@ -30,33 +28,36 @@ const CreateTask = ({ onSubmit, onCancel }) => {
   const [successMessage, setSuccessMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // --- Data Fetching Effect ---
   useEffect(() => {
     const fetchData = async () => {
       try {
         const token = localStorage.getItem("access_token");
 
-        // Fetch users
-        const usersRes = await api.get("/api/users/", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const [usersRes, catsRes] = await Promise.all([
+          api.get("/api/users/", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          publicApi.get("/api/categories/"),
+        ]);
+
         setUsers(usersRes.data);
+        const cats = catsRes.data || [];
+        setCategories(cats);
 
-        // Fetch categories
-        const catsRes = await api.get("/api/categories/", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setCategories(catsRes.data);
-
-        // FIX: Ensure initial state is set as a STRING ID if data exists
-        if (catsRes.data.length > 0) {
-          setCategory(String(catsRes.data[0].id));
+        if (cats.length > 0) {
+          setCategory(String(cats[0].id));
         } else {
-          setCategory(""); // Kept empty to match the placeholder
+          setErrorMessage("No categories yet — adding defaults...");
+          await publicApi.get("/api/categories/"); // Trigger creation
+          const retry = await publicApi.get("/api/categories/");
+          setCategories(retry.data);
+          if (retry.data.length > 0) {
+            setCategory(String(retry.data[0].id));
+            setErrorMessage("");
+          }
         }
-      } catch (error) {
-        console.error("Failed to load initial data:", error);
-        setErrorMessage("Failed to load users or categories.");
+      } catch (err) {
+        setErrorMessage("Failed to load data. Please refresh.");
       } finally {
         setLoading(false);
       }
@@ -65,10 +66,7 @@ const CreateTask = ({ onSubmit, onCancel }) => {
   }, []);
 
   const handleAssignedUserChange = (e) => {
-    const selected = Array.from(e.target.selectedOptions).map(
-      (opt) => opt.value
-    );
-    setAssignedUsers(selected);
+    setAssignedUsers(Array.from(e.target.selectedOptions, (opt) => opt.value));
   };
 
   const handleFileChange = (e) => {
@@ -80,139 +78,93 @@ const CreateTask = ({ onSubmit, onCancel }) => {
     setDescription("");
     setDueDate(new Date());
     setPriority("medium");
-    // FIX: Ensure reset value is a STRING ID
-    setCategory(categories.length > 0 ? String(categories[0].id) : "");
+    setCategory(categories[0] ? String(categories[0].id) : "");
     setStatus("pending");
     setAssignedUsers([]);
     setFiles([]);
-    setSuccessMessage("");
     setErrorMessage("");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
     setErrorMessage("");
     setSuccessMessage("");
-    setIsSubmitting(true);
 
     try {
       const formData = new FormData();
       formData.append("title", title);
       formData.append("description", description);
-
-      const dateObj = new Date(dueDate);
-      const formattedDate = `${dateObj.getFullYear()}-${(dateObj.getMonth() + 1)
-        .toString()
-        .padStart(2, "0")}-${dateObj.getDate().toString().padStart(2, "0")}`;
-      formData.append("due_date", formattedDate);
-
+      formData.append("due_date", dueDate.toISOString().split("T")[0]);
       formData.append("priority", priority);
-      formData.append("category", category); // sending the category ID (as a string)
+      formData.append("category", category);
       formData.append("status", status);
-
-      assignedUsers.forEach((userId) =>
-        formData.append("assigned_users", userId)
-      );
-      files.forEach((file) => formData.append("files", file));
+      assignedUsers.forEach((id) => formData.append("assigned_users", id));
+      files.forEach((f) => formData.append("files", f));
 
       await onSubmit(formData);
-
-      setSuccessMessage("Task created successfully!");
-      setTimeout(() => {
-        resetForm();
-        setSuccessMessage("");
-      }, 3000);
-    } catch (error) {
-      console.error("Task creation failed:", error.response || error);
-      setErrorMessage(
-        error?.response?.data?.detail ||
-          error?.message ||
-          "Something went wrong while creating the task."
-      );
+      setSuccessMessage("Task created!");
+      setTimeout(resetForm, 2000);
+    } catch (err) {
+      setErrorMessage("Failed to create task. Try again.");
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleCancel = () => {
-    resetForm();
-    if (onCancel) onCancel();
   };
 
   if (loading) {
     return (
       <Container className="text-center mt-5">
         <Spinner animation="border" />
-        <p>Loading users and categories...</p>
+        <p>Loading form...</p>
       </Container>
     );
   }
 
-  // --- Rendered Form ---
   return (
-    <Container
-      className={clsx(
-        styles.container,
-        "d-flex",
-        "flex-column",
-        "justify-content-center",
-        "align-items-center",
-        "mt-5"
-      )}
-    >
-      <Card className="p-4 shadow" style={{ width: "100%", maxWidth: "600px" }}>
-        <h3 className="text-center mb-4">Create Task</h3>
+    <Container className={clsx(styles.container, "mt-5")}>
+      <Card
+        className="p-4 shadow"
+        style={{ maxWidth: "620px", margin: "auto" }}
+      >
+        <h3 className="text-center mb-4">Create New Task</h3>
 
-        {/* Alerts */}
-        {successMessage && (
-          <Alert variant="success" className="mb-3">
-            {successMessage}
-          </Alert>
-        )}
-        {errorMessage && (
-          <Alert variant="danger" className="mb-3">
-            {errorMessage}
-          </Alert>
-        )}
+        {successMessage && <Alert variant="success">{successMessage}</Alert>}
+        {errorMessage && <Alert variant="warning">{errorMessage}</Alert>}
 
         <Form onSubmit={handleSubmit}>
-          {/* Title */}
-          <Form.Group controlId="taskTitle" className="mb-3">
+          <Form.Group className="mb-3">
             <Form.Control
               type="text"
-              placeholder="Task Title"
+              placeholder="Task Title *"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
             />
           </Form.Group>
 
-          {/* Description */}
-          <Form.Group controlId="taskDescription" className="mb-3">
+          <Form.Group className="mb-3">
             <Form.Control
               as="textarea"
-              placeholder="Task Description"
+              rows={3}
+              placeholder="Description *"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={3}
               required
             />
           </Form.Group>
 
-          {/* Due Date */}
-          <Form.Group controlId="dueDate" className="mb-3">
+          <Form.Group className="mb-3">
             <Form.Label>Due Date</Form.Label>
             <DatePicker
               selected={dueDate}
-              onChange={(date) => setDueDate(date)}
+              onChange={setDueDate}
               className="form-control"
-              required
               minDate={new Date()}
             />
           </Form.Group>
 
-          {/* Priority */}
-          <Form.Group controlId="taskPriority" className="mb-3">
+          <Form.Group className="mb-3">
             <Form.Label>Priority</Form.Label>
             <Form.Select
               value={priority}
@@ -224,30 +176,44 @@ const CreateTask = ({ onSubmit, onCancel }) => {
             </Form.Select>
           </Form.Group>
 
-          {/* Category Dropdown (Dynamic) */}
-          <Form.Group controlId="taskCategory" className="mb-3">
-            <Form.Label>Category</Form.Label>
-            <Form.Select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              required
-            >
-              <option value="" disabled hidden>
-                Select a Category
-              </option>
-
-              {/* Map over fetched categories */}
-              {categories.map((cat) => (
-                // FIX: Use of String(cat.id) to ensure consistency with state
-                <option key={cat.id} value={String(cat.id)}>
-                  {cat.name}
+          {/* FINAL TOUCH: Beautiful fallback UX */}
+          <Form.Group className="mb-3">
+            <Form.Label>Category *</Form.Label>
+            {categories.length === 0 ? (
+              <Alert variant="info" className="py-2 mb-2">
+                <strong>No categories yet.</strong> We’re adding defaults for
+                you...
+                <br />
+                <small>
+                  Or{" "}
+                  <a
+                    href="/admin/productivity_app/category/add/"
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    add your own in Django Admin
+                  </a>
+                </small>
+              </Alert>
+            ) : (
+              <Form.Select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                required
+              >
+                <option value="" disabled>
+                  Select Category
                 </option>
-              ))}
-            </Form.Select>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={String(cat.id)}>
+                    {cat.name}
+                  </option>
+                ))}
+              </Form.Select>
+            )}
           </Form.Group>
 
-          {/* Status */}
-          <Form.Group controlId="taskStatus" className="mb-3">
+          <Form.Group className="mb-3">
             <Form.Label>Status</Form.Label>
             <Form.Select
               value={status}
@@ -259,43 +225,35 @@ const CreateTask = ({ onSubmit, onCancel }) => {
             </Form.Select>
           </Form.Group>
 
-          {/* Assigned Users */}
-          <Form.Group controlId="assignedUsers" className="mb-3">
-            <Form.Label>Assigned Users</Form.Label>
+          <Form.Group className="mb-3">
+            <Form.Label>Assign Users</Form.Label>
             <Form.Select
               multiple
-              required
               value={assignedUsers}
               onChange={handleAssignedUserChange}
             >
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.username}
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.username}
                 </option>
               ))}
             </Form.Select>
           </Form.Group>
 
-          {/* Files */}
-          <Form.Group controlId="taskFiles" className="mb-3">
-            <Form.Label>Upload Files</Form.Label>
+          <Form.Group className="mb-3">
+            <Form.Label>Attach Files</Form.Label>
             <Form.Control type="file" multiple onChange={handleFileChange} />
           </Form.Group>
 
-          {/* Buttons */}
-          <div className="d-flex justify-content-between mt-4">
-            <Button variant="primary" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <Spinner animation="border" size="sm" />
-              ) : (
-                "Create Task"
-              )}
-            </Button>
+          <div className="d-flex gap-2">
             <Button
-              variant="outline-secondary"
-              type="button"
-              onClick={handleCancel}
+              variant="primary"
+              type="submit"
+              disabled={isSubmitting || categories.length === 0}
             >
+              {isSubmitting ? "Creating..." : "Create Task"}
+            </Button>
+            <Button variant="secondary" onClick={onCancel || resetForm}>
               Cancel
             </Button>
           </div>
