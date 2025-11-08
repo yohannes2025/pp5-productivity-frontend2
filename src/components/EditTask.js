@@ -98,7 +98,7 @@ const EditTask = () => {
     formData.append("category", category);
     formData.append("status", status);
     assignedUsers.forEach((id) => formData.append("assigned_users", id));
-    files.forEach((file) => formData.append("files", file));
+    files.forEach((file, index) => formData.append("new_files[]", file));
 
     try {
       await api.put(`/api/tasks/${id}/`, formData, {

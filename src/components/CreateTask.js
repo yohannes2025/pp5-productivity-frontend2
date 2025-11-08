@@ -99,14 +99,29 @@ const CreateTask = ({ onSubmit, onCancel }) => {
       formData.append("priority", priority);
       formData.append("category", category);
       formData.append("status", status);
-      assignedUsers.forEach((id) => formData.append("assigned_users", id));
-      files.forEach((f) => formData.append("files", f));
 
-      await onSubmit(formData);
-      setSuccessMessage("Task created!");
-      setTimeout(resetForm, 2000);
+      // FIX: Send as numbers
+      assignedUsers.forEach((id) =>
+        formData.append("assigned_users", Number(id))
+      );
+
+      // FIX: Send files correctly
+      files.forEach((file, index) => formData.append("new_files[]", file));
+
+      console.log("Sending:", Object.fromEntries(formData)); // DEBUG
+
+      await api.post("/api/tasks/", formData); // api.js fixes headers
+
+      setSuccessMessage("Task + files uploaded!");
+      setTimeout(() => {
+        resetForm();
+        onCancel?.();
+      }, 1500);
     } catch (err) {
-      setErrorMessage("Failed to create task. Try again.");
+      console.error("400 Error:", err.response?.data);
+      setErrorMessage(
+        "Check: file size <10MB, category selected, users assigned"
+      );
     } finally {
       setIsSubmitting(false);
     }
