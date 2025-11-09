@@ -43,7 +43,7 @@ const Register = () => {
       const response = await api.post(
         "/api/register/",
         {
-          username, // now matches backend serializer
+          username,
           email,
           password,
           confirm_password: confirmPassword,

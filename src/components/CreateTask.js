@@ -191,7 +191,7 @@ const CreateTask = ({ onSubmit, onCancel }) => {
             </Form.Select>
           </Form.Group>
 
-          {/* FINAL TOUCH: Beautiful fallback UX */}
+          {/* Beautiful fallback UX */}
           <Form.Group className="mb-3">
             <Form.Label>Category *</Form.Label>
             {categories.length === 0 ? (
